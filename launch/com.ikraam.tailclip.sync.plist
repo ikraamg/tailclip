@@ -5,6 +5,8 @@
   <key>Label</key><string>com.ikraam.tailclip.sync</string>
   <key>ProgramArguments</key>
   <array><string>__HOME__/.local/bin/tailclip-sync</string></array>
+  <key>EnvironmentVariables</key>
+  <dict><key>TAILCLIP_CENTER</key><string>__CENTER__</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardErrorPath</key><string>__HOME__/Library/Logs/tailclip-sync.log</string>

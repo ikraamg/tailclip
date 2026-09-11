@@ -1,13 +1,15 @@
 #!/bin/sh
-# Usage: bin/install sync        (every Mac)
-#        bin/install center      (the always-on Mac; also runs sync)
+# Usage: bin/install sync <center-url>   (every Mac)
+#        bin/install center              (the always-on Mac; also runs sync)
 set -eu
 cd "$(dirname "$0")/.."
 REPO=$(pwd)
+CENTER=${2:-}
 
 load_agent() {
   mkdir -p ~/Library/LaunchAgents ~/Library/Logs
-  sed "s|__HOME__|$HOME|g; s|__REPO__|$REPO|g" "launch/$1.plist" > ~/Library/LaunchAgents/"$1.plist"
+  sed "s|__HOME__|$HOME|g; s|__REPO__|$REPO|g; s|__CENTER__|$CENTER|g; s|__BUNDLE__|${BUNDLE:-}|g" \
+    "launch/$1.plist" > ~/Library/LaunchAgents/"$1.plist"
   launchctl bootout "gui/$(id -u)/$1" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/"$1.plist"
   echo "loaded $1"
@@ -15,14 +17,17 @@ load_agent() {
 
 case "${1:-}" in
   center)
+    BUNDLE=$(command -v bundle)
     (cd center && bundle install --quiet)
     load_agent com.ikraam.tailclip.center
     tailscale serve --bg --https=8443 http://127.0.0.1:8788 >/dev/null
-    echo "center at https://$(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))'):8443"
-    "$0" sync
+    CENTER="https://$(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))'):8443"
+    echo "center at $CENTER"
+    "$0" sync "$CENTER"
     ;;
   sync)
-    (cd sync && swift build -c release 2>&1 | tail -1)
+    [ -n "$CENTER" ] || { sed -n '2,3p' "$0"; exit 1; }
+    (cd sync && swift build -c release --quiet)
     mkdir -p ~/.local/bin
     cp sync/.build/release/tailclip-sync ~/.local/bin/tailclip-sync
     load_agent com.ikraam.tailclip.sync

@@ -3,7 +3,12 @@ import Foundation
 import SyncCore
 import SystemConfiguration
 
-let center = URL(string: ProcessInfo.processInfo.environment["TAILCLIP_CENTER"] ?? "https://<center-url>")!
+func log(_ message: String) { FileHandle.standardError.write(Data("\(Date()) \(message)\n".utf8)) }
+
+let center: URL = ProcessInfo.processInfo.environment["TAILCLIP_CENTER"].flatMap({ URL(string: $0) }) ?? {
+    log("TAILCLIP_CENTER is not set; run bin/install sync <center-url>")
+    exit(1)
+}()
 // The Sharing-pane hostname: ASCII, unlike the computer name, so it survives an HTTP header.
 let device = SCDynamicStoreCopyLocalHostName(nil) as String? ?? "unknown-mac"
 let pasteboard = NSPasteboard.general
@@ -11,8 +16,6 @@ let ownType = NSPasteboard.PasteboardType(ClipDecision.ownType)
 var lastChangeCount = pasteboard.changeCount
 var lastSeen: Clip?
 var lastSeq = 0
-
-func log(_ message: String) { FileHandle.standardError.write(Data("\(Date()) \(message)\n".utf8)) }
 
 func snapshot() -> PasteboardSnapshot {
     let types = Set((pasteboard.types ?? []).map(\.rawValue))

@@ -5,7 +5,7 @@
   <key>Label</key><string>com.ikraam.tailclip.center</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__HOME__/.local/share/mise/shims/bundle</string>
+    <string>__BUNDLE__</string>
     <string>exec</string><string>puma</string>
     <string>-b</string><string>tcp://127.0.0.1:8788</string>
     <string>config.ru</string>
@@ -13,7 +13,7 @@
   <key>WorkingDirectory</key><string>__REPO__/center</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>PATH</key><string>__HOME__/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PATH</key><string>__HOME__/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>HOME</key><string>__HOME__</string>
     <key>RACK_ENV</key><string>production</string>
   </dict>
