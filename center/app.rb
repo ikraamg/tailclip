@@ -33,8 +33,8 @@ class Center < Sinatra::Base
 
   reset!
   set :views, File.join(__dir__, 'views')
-  # Tailscale decides who can reach this; Sinatra's default host list would 403 the tailnet name.
-  set :host_authorization, permitted_hosts: []
+  # Any other Host is a browser on this Mac being DNS-rebound at 127.0.0.1:8788.
+  set :host_authorization, permitted_hosts: ['localhost', '127.0.0.1', '.ts.net']
 
   get('/') { erb :index }
 

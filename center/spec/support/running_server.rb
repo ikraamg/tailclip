@@ -18,7 +18,7 @@ RSpec.shared_context 'with a running server' do
   def open_events
     TCPSocket.new('127.0.0.1', port).tap do |socket|
       socket.timeout = 2
-      socket.write "GET /events HTTP/1.0\r\nHost: center\r\n\r\n"
+      socket.write "GET /events HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n"
     end
   end
 

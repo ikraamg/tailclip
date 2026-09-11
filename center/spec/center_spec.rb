@@ -111,6 +111,23 @@ RSpec.describe Center do
     end
   end
 
+  describe 'host authorization' do
+    it 'refuses a host that is not the tailnet or localhost, so a rebound domain cannot reach the clip' do
+      get '/clip', {}, 'HTTP_HOST' => 'evil.example:8788'
+      expect(last_response.status).to eq 403
+    end
+
+    it 'admits the tailnet name' do
+      get '/clip', {}, 'HTTP_HOST' => 'center.tail0000.ts.net:8443'
+      expect(last_response.status).to eq 404
+    end
+
+    it 'admits localhost, where Tailscale Serve and the specs connect from' do
+      get '/clip', {}, 'HTTP_HOST' => '127.0.0.1:8788'
+      expect(last_response.status).to eq 404
+    end
+  end
+
   describe 'GET /' do
     it 'serves the page' do
       get '/'
