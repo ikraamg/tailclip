@@ -61,6 +61,7 @@ class Center < Sinatra::Base
     content_type 'text/event-stream'
     headers 'Cache-Control' => 'no-store'
     queue = Queue.new
+    queue << ": connected\n\n" # Puma holds the headers until the first body byte
     self.class.listeners << queue
     stream do |out|
       while (message = queue.pop)

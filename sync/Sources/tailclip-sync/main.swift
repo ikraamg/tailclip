@@ -10,6 +10,7 @@ let pasteboard = NSPasteboard.general
 let ownType = NSPasteboard.PasteboardType(ClipDecision.ownType)
 var lastChangeCount = pasteboard.changeCount
 var lastSeen: Clip?
+var lastSeq = 0
 
 func log(_ message: String) { FileHandle.standardError.write(Data("\(Date()) \(message)\n".utf8)) }
 
@@ -54,25 +55,51 @@ func pollPasteboard() {
 func fetchLatest() {
     URLSession.shared.dataTask(with: center.appending(path: "clip")) { data, response, error in
         guard let data, let response = response as? HTTPURLResponse, error == nil else { return log("fetch failed: \(error?.localizedDescription ?? "?")") }
-        guard response.value(forHTTPHeaderField: "X-Device") != device,
+        let seq = Int(response.value(forHTTPHeaderField: "X-Seq") ?? "") ?? 0
+        defer { lastSeq = max(lastSeq, seq) }
+        guard seq > lastSeq, response.value(forHTTPHeaderField: "X-Device") != device,
               let clip = Clip(contentType: response.value(forHTTPHeaderField: "Content-Type") ?? "", body: data) else { return }
+        log("wrote clip \(seq) from \(response.value(forHTTPHeaderField: "X-Device") ?? "?")")
         DispatchQueue.main.async { write(clip) }
     }.resume()
 }
 
 /// Reads Center's SSE stream; every `clip` event from another device is fetched and written to the pasteboard.
 final class EventListener: NSObject, URLSessionDataDelegate {
+    /// Center heartbeats every 15s; silence for longer than this means the connection died without telling us (sleep, network change).
+    static let silenceLimit: TimeInterval = 45
+
     private var buffer = ""
     private var retryDelay: TimeInterval = 1
+    private var task: URLSessionDataTask?
+    private var lastByteAt = Date()
+    private var reconnecting = false
 
     func connect() {
         var request = URLRequest(url: center.appending(path: "events"), timeoutInterval: .infinity)
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        URLSession(configuration: .default, delegate: self, delegateQueue: nil).dataTask(with: request).resume()
+        lastByteAt = Date()
+        task = URLSession(configuration: .default, delegate: self, delegateQueue: nil).dataTask(with: request)
+        task?.resume()
+    }
+
+    func checkSilence() {
+        guard Date().timeIntervalSince(lastByteAt) > Self.silenceLimit else { return }
+        log("no bytes from Center for \(Int(Self.silenceLimit))s, reconnecting")
+        lastByteAt = Date()
+        task?.cancel()
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        completionHandler(.allow)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+        retryDelay = 1
+        if reconnecting { fetchLatest() }
+        reconnecting = true
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        retryDelay = 1
+        lastByteAt = Date()
         buffer += String(decoding: data, as: UTF8.self)
         while let range = buffer.range(of: "\n\n") {
             let event = buffer[..<range.lowerBound]
@@ -93,4 +120,5 @@ log("tailclip-sync on \(device), center \(center)")
 let listener = EventListener()
 listener.connect()
 Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in pollPasteboard() }
+Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in listener.checkSilence() }
 RunLoop.main.run()

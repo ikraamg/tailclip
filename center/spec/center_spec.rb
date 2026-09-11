@@ -91,8 +91,14 @@ RSpec.describe Center do
       expect(described_class.listeners.size).to eq 1
     end
 
+    it 'greets a new connection at once' do
+      socket_headers
+      expect(socket.gets).to eq ": connected\n"
+    end
+
     it 'pushes each clip as it arrives' do
       socket_headers
+      2.times { socket.gets }
       post_text
       expect(socket.gets).to eq "event: clip\n"
     end
