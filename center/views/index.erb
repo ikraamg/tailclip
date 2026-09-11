@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tailclip</title>
+<style>
+  body { font: 16px -apple-system, system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+  textarea { width: 100%; min-height: 8rem; font: inherit; box-sizing: border-box; }
+  #latest { white-space: pre-wrap; word-break: break-word; border: 1px solid #ccc; padding: .75rem; min-height: 3rem; }
+  #latest img { max-width: 100%; }
+  small { color: #666; }
+  button { font: inherit; padding: .5rem 1rem; }
+</style>
+<h1>tailclip</h1>
+<p><small id="from">nothing yet</small></p>
+<div id="latest"></div>
+<p><button id="copy">Copy</button></p>
+<textarea id="text" placeholder="paste here, then Send"></textarea>
+<p><button id="send">Send</button></p>
+<script>
+  const latest = document.getElementById('latest'), from = document.getElementById('from')
+  let latestText = ''
+  async function refresh() {
+    const res = await fetch('/clip', { cache: 'no-store' })
+    if (!res.ok) return
+    from.textContent = `from ${res.headers.get('x-device')}`
+    if (res.headers.get('content-type').startsWith('image/')) {
+      latestText = ''
+      latest.innerHTML = ''
+      latest.appendChild(Object.assign(new Image(), { src: URL.createObjectURL(await res.blob()) }))
+    } else {
+      latestText = await res.text()
+      latest.textContent = latestText
+    }
+  }
+  document.getElementById('copy').onclick = () => navigator.clipboard.writeText(latestText)
+  document.getElementById('send').onclick = () => {
+    const text = document.getElementById('text').value
+    if (text) fetch('/clip', { method: 'POST', body: text, headers: { 'Content-Type': 'text/plain', 'X-Device': 'web' } })
+  }
+  new EventSource('/events').addEventListener('clip', refresh)
+  refresh()
+</script>
