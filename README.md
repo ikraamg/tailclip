@@ -17,8 +17,7 @@ removed. Same two halves:
 - Two or more Macs signed in to the same Tailscale account, with Tailscale.app running.
 - One of them always on. That's where Center lives. (Here: the Mac mini.)
 - Xcode Command Line Tools on every Mac (`xcode-select --install` if `swift --version` complains).
-- Ruby on the Center Mac. Any recent one; it's installed with mise here.
-- Access to this repo. It's private, so `gh auth login` or an SSH key first.
+- Ruby on the Center Mac. Any recent one, from wherever you usually get Ruby.
 
 You do not need Xcode, Homebrew, Docker, or a Tailscale auth key. If you find yourself
 generating a key, stop, you've wandered off.
@@ -26,12 +25,12 @@ generating a key, stop, you've wandered off.
 ## Install on the always-on Mac
 
 ```sh
-git clone git@github.com:ikraamg/tailclip.git ~/Documents/GitHub/tailclip
-cd ~/Documents/GitHub/tailclip
+git clone https://github.com/ikraamg/tailclip.git
+cd tailclip
 bin/install center
 ```
 
-That does four things. You can read `bin/install`, it's 30 lines.
+That does four things. You can read `bin/install`, it's short.
 
 1. `bundle install` in `center/`.
 2. Loads a LaunchAgent, `com.ikraam.tailclip.center`, that runs Puma on `127.0.0.1:8788`.
@@ -39,26 +38,30 @@ That does four things. You can read `bin/install`, it's 30 lines.
 3. `tailscale serve --bg --https=8443 http://127.0.0.1:8788`. Tailscale now answers
    `https://<this-mac>.<tailnet>.ts.net:8443` for tailnet devices only, with a certificate it
    renews itself. This is the whole reason there's no expiry bug.
-4. Runs `bin/install sync` too, because this Mac has a clipboard as well.
+4. Runs `bin/install sync` with that URL, because this Mac has a clipboard as well.
 
-It prints the URL at the end. Write it down, you'll want it for the phone.
+It prints the URL at the end. Write it down, you'll want it for the other Macs and the phone.
 
-Port 8443 and not 443? Because something else might already be on 443. `tailscale serve status` shows what's mapped where. Don't clobber it.
+Port 8443 and not 443? Because something else might already be on 443. `tailscale serve status`
+shows what's mapped where. Don't clobber it.
+
+If more than one person is on your tailnet, read "Who can read your clipboard" below before
+you go any further.
 
 ## Install on every other Mac
 
 ```sh
-git clone git@github.com:ikraamg/tailclip.git ~/Documents/GitHub/tailclip
-cd ~/Documents/GitHub/tailclip
-bin/install sync
+git clone https://github.com/ikraamg/tailclip.git
+cd tailclip
+bin/install sync https://<your-center>.<your-tailnet>.ts.net:8443
 ```
+
+The URL is the one `bin/install center` printed. Don't guess it, run `tailscale status` on the
+Center Mac and copy the name. It ends up as `TAILCLIP_CENTER` in the LaunchAgent, and Sync
+refuses to start without it.
 
 That builds `sync/` in release mode, copies the binary to `~/.local/bin/tailclip-sync`, and loads
 the `com.ikraam.tailclip.sync` LaunchAgent. It starts at login and restarts if it dies.
-
-Sync knows where Center is from a default in `sync/Sources/tailclip-sync/main.swift`. If your
-Center has a different name, either change that line or set `TAILCLIP_CENTER` in the plist.
-Don't guess, run `tailscale status` and copy the name.
 
 ## Check it actually works
 
@@ -73,13 +76,13 @@ Now the loop, both directions:
 
 ```sh
 echo "hello from $(hostname)" | pbcopy; sleep 2
-curl -s -D - https://<center-url>/clip
+curl -s -D - <center-url>/clip
 ```
 
 Expect `x-device: <your host name>` and your text. Then pretend to be another device:
 
 ```sh
-curl -s -X POST https://<center-url>/clip \
+curl -s -X POST <center-url>/clip \
   -H 'Content-Type: text/plain' -H 'X-Device: fake' --data 'hi back'
 sleep 2; pbpaste
 ```
@@ -96,9 +99,35 @@ there or it isn't.
 
 ## The phone
 
-Open `https://<center-url>/` in the phone's browser while its
-Tailscale is on. You get the latest clip, a Copy button, and a box to send text from. That's
+Open `<center-url>/` in the phone's browser while its Tailscale is on. You get the latest clip, a Copy button, and a box to send text from. That's
 it. There's no app and there won't be one; iOS and Android kill background clipboard readers.
+
+## Who can read your clipboard
+
+Everyone on your tailnet. That's the whole security model, so be clear about what it means:
+
+- Any device that can reach the Center Mac on port 8443 can read the latest clip and push text
+  or an image onto every Mac running Sync. Tailscale decides who that is. On a tailnet of one
+  person and their own devices, that's you. On a shared tailnet, or with shared nodes, it's
+  them too.
+- What lands on your pasteboard is whatever the sender sent. If you then paste it into a
+  terminal, that's what runs. Treat a received clip like you'd treat one from a coworker's
+  screen share: fine most of the time, but look before you paste a command.
+- Center keeps one clip in memory and never writes it to disk. Sync logs device names and
+  sequence numbers, never content.
+- Center only listens on `127.0.0.1` and only admits the `Host` values Tailscale Serve sends,
+  so a web page open on the Center Mac can't reach it by DNS rebinding.
+
+Two ways to narrow it:
+
+- `TAILCLIP_LOGINS=you@example.com bin/install center` makes Center refuse any request Tailscale
+  Serve stamps with a different login (comma-separate to allow several). A request with no
+  login came from the Center Mac itself and is allowed. Serve overwrites the header if a client
+  tries to send its own, so this can't be spoofed from the tailnet.
+- Tailscale ACLs can restrict port 8443 on the Center Mac to your own devices.
+
+Never put this behind `tailscale funnel`. That's the public internet, and Center has no login of
+its own.
 
 ## What Sync refuses to send
 
@@ -119,10 +148,14 @@ Everything else goes: text as `text/plain`, images as PNG (TIFF screenshots get 
 
 ## When it breaks
 
-- **`Host not permitted`** on the URL — Center is running an old build. `bin/install center` again.
+- **`Host not permitted`** on the URL — Center is being reached by a name that isn't `*.ts.net`
+  or localhost. Use the URL `bin/install center` printed.
+- **`login not permitted`** — you set `TAILCLIP_LOGINS` and this device is signed in as someone
+  else. Check `tailscale status` on that device.
+- **Sync log says `TAILCLIP_CENTER is not set`** — run `bin/install sync <center-url>` with the URL.
 - **403 from the URL on your phone** — the phone isn't on the tailnet. Turn Tailscale on.
-- **Sync log loops "events disconnected ... retrying"** — Center is down or the URL in `main.swift`
-  is wrong. Check `tail ~/Library/Logs/tailclip-center.log` on the always-on Mac.
+- **Sync log loops "events disconnected ... retrying"** — Center is down or the URL you gave
+  `bin/install sync` is wrong. Check `tail ~/Library/Logs/tailclip-center.log` on the always-on Mac.
 - **Copied something, nothing arrived** — check the refuse list above. Then check Sync is running
   on *both* Macs; it's the one you forgot.
 - **Restart a thing:** `launchctl kickstart -k gui/$(id -u)/com.ikraam.tailclip.sync` (or `.center`).
@@ -132,11 +165,11 @@ Everything else goes: text as `text/plain`, images as PNG (TIFF screenshots get 
 ## Working on it
 
 ```sh
-cd center && bundle exec rspec       # 17 specs, one of them against a real Puma for the SSE stream
+cd center && bundle exec rspec       # 25 specs, five of them against a real Puma for the SSE stream
 cd sync && swift run sync-check      # 12 checks; Command Line Tools have no XCTest, so it's an executable
 ```
 
-After a change, `bin/install center` or `bin/install sync` rebuilds and reloads. Then run the
+After a change, `bin/install center` or `bin/install sync <center-url>` rebuilds and reloads. Then run the
 "check it actually works" section again. Green tests say the code runs; they don't say your
 clipboard moved.
 
