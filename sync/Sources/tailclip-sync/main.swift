@@ -73,7 +73,6 @@ final class EventListener: NSObject, URLSessionDataDelegate {
     private var retryDelay: TimeInterval = 1
     private var task: URLSessionDataTask?
     private var lastByteAt = Date()
-    private var reconnecting = false
 
     func connect() {
         var request = URLRequest(url: center.appending(path: "events"), timeoutInterval: .infinity)
@@ -94,8 +93,7 @@ final class EventListener: NSObject, URLSessionDataDelegate {
         completionHandler(.allow)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
         retryDelay = 1
-        if reconnecting { fetchLatest() }
-        reconnecting = true
+        fetchLatest()
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
