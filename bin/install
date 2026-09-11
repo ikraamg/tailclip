@@ -8,7 +8,7 @@ CENTER=${2:-}
 
 load_agent() {
   mkdir -p ~/Library/LaunchAgents ~/Library/Logs
-  sed "s|__HOME__|$HOME|g; s|__REPO__|$REPO|g; s|__CENTER__|$CENTER|g; s|__BUNDLE__|${BUNDLE:-}|g" \
+  sed "s|__HOME__|$HOME|g; s|__REPO__|$REPO|g; s|__CENTER__|$CENTER|g; s|__BUNDLE__|${BUNDLE:-}|g; s|__LOGINS__|${TAILCLIP_LOGINS:-}|g" \
     "launch/$1.plist" > ~/Library/LaunchAgents/"$1.plist"
   launchctl bootout "gui/$(id -u)/$1" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/"$1.plist"

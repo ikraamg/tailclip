@@ -128,6 +128,34 @@ RSpec.describe Center do
     end
   end
 
+  describe 'login allowlist' do
+    let(:as_login) { ->(login) { get '/clip', {}, 'HTTP_TAILSCALE_USER_LOGIN' => login } }
+
+    context 'when TAILCLIP_LOGINS names who may use Center' do
+      before { stub_const('Center::LOGINS', ['me@example.com']) }
+
+      it 'refuses another tailnet login' do
+        as_login.call('them@example.com')
+        expect(last_response.status).to eq 403
+      end
+
+      it 'admits a listed login' do
+        as_login.call('me@example.com')
+        expect(last_response.status).to eq 404
+      end
+
+      it 'admits a request with no login, which only this Mac can make' do
+        get '/clip'
+        expect(last_response.status).to eq 404
+      end
+    end
+
+    it 'admits every login when the list is empty' do
+      as_login.call('them@example.com')
+      expect(last_response.status).to eq 404
+    end
+  end
+
   describe 'GET /' do
     it 'serves the page' do
       get '/'

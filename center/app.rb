@@ -6,6 +6,7 @@ class Center < Sinatra::Base
   MAX_BYTES = 10 * 1024 * 1024
   TYPES = %w[text/plain image/png].freeze
   HEARTBEAT_SECONDS = 15
+  LOGINS = ENV['TAILCLIP_LOGINS'].to_s.split(',').map(&:strip).reject(&:empty?).freeze
 
   class << self
     attr_reader :clip, :listeners
@@ -35,6 +36,12 @@ class Center < Sinatra::Base
   set :views, File.join(__dir__, 'views')
   # Any other Host is a browser on this Mac being DNS-rebound at 127.0.0.1:8788.
   set :host_authorization, permitted_hosts: ['localhost', '127.0.0.1', '.ts.net']
+
+  # Tailscale Serve stamps this header over anything the client sent; a request without it came from this Mac.
+  before do
+    login = request.env['HTTP_TAILSCALE_USER_LOGIN']
+    halt 403, 'login not permitted' if login && LOGINS.any? && !LOGINS.include?(login)
+  end
 
   get('/') { erb :index }
 
