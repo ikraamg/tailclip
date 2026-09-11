@@ -33,6 +33,8 @@ class Center < Sinatra::Base
 
   reset!
   set :views, File.join(__dir__, 'views')
+  # Tailscale decides who can reach this; Sinatra's default host list would 403 the tailnet name.
+  set :host_authorization, permitted_hosts: []
 
   get('/') { erb :index }
 
